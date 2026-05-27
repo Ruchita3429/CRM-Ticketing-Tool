@@ -1,7 +1,6 @@
 require('dotenv').config();
 
 const express = require('express');
-const cors = require('cors');
 const { initSchema, dbPath } = require('./db/database');
 const { seedUsers } = require('./db/seed');
 const authRoutes = require('./routes/auth');
@@ -21,7 +20,7 @@ if (process.env.FRONTEND_URL) {
 }
 
 function isAllowedOrigin(origin) {
-  if (!origin) return true;
+  if (!origin) return false;
   if (allowedOrigins.has(origin)) return true;
   return /^https:\/\/[\w-]+\.vercel\.app$/.test(origin);
 }
@@ -31,22 +30,26 @@ if (!process.env.JWT_SECRET) {
   process.exit(1);
 }
 
-// Middleware — must allow Vercel origin + Authorization header for preflight
-app.use(
-  cors({
-    origin(origin, callback) {
-      if (isAllowedOrigin(origin)) {
-        callback(null, true);
-      } else {
-        callback(null, false);
-      }
-    },
-    credentials: true,
-    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization'],
-  })
-);
-app.options('*', cors());
+// Explicit CORS — required for Vercel frontend → Render API (incl. Authorization preflight)
+app.use((req, res, next) => {
+  const origin = req.headers.origin;
+
+  if (origin && isAllowedOrigin(origin)) {
+    res.setHeader('Access-Control-Allow-Origin', origin);
+    res.setHeader('Access-Control-Allow-Credentials', 'true');
+    res.setHeader('Vary', 'Origin');
+  }
+
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+
+  if (req.method === 'OPTIONS') {
+    return res.sendStatus(204);
+  }
+
+  next();
+});
+
 app.use(express.json());
 
 // Health check
