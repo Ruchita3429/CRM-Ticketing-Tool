@@ -11,21 +11,42 @@ const errorHandler = require('./middleware/errorHandler');
 const app = express();
 const PORT = process.env.PORT || 5000;
 
+const allowedOrigins = new Set([
+  'http://localhost:5173',
+  'https://crm-ticketing-tool.vercel.app',
+]);
+
+if (process.env.FRONTEND_URL) {
+  allowedOrigins.add(process.env.FRONTEND_URL.replace(/\/$/, ''));
+}
+
+function isAllowedOrigin(origin) {
+  if (!origin) return true;
+  if (allowedOrigins.has(origin)) return true;
+  return /^https:\/\/[\w-]+\.vercel\.app$/.test(origin);
+}
+
 if (!process.env.JWT_SECRET) {
   console.error('FATAL: JWT_SECRET is not set. Copy .env.example to .env and configure it.');
   process.exit(1);
 }
 
-// Middleware
+// Middleware — must allow Vercel origin + Authorization header for preflight
 app.use(
   cors({
-    origin: [
-      'http://localhost:5173',
-      'https://your-frontend.vercel.app',
-    ],
+    origin(origin, callback) {
+      if (isAllowedOrigin(origin)) {
+        callback(null, true);
+      } else {
+        callback(null, false);
+      }
+    },
     credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization'],
   })
 );
+app.options('*', cors());
 app.use(express.json());
 
 // Health check

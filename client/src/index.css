@@ -814,6 +814,17 @@ p {
   gap: 1rem;
 }
 
+.form-submit-status {
+  margin-top: 0.7rem;
+  color: #93c5fd;
+  font-size: 0.9rem;
+}
+
+.form-loading {
+  opacity: 0.75;
+  pointer-events: none;
+}
+
 .create-ticket-form label {
   display: flex;
   flex-direction: column;

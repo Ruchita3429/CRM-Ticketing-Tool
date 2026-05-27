@@ -110,9 +110,10 @@ function NewTicketPage() {
       <div className="crm-card create-ticket-card">
         <h2>Create New Ticket</h2>
         <p className="muted">Fill in the customer details and issue description.</p>
+        {isSubmitting && <p className="form-submit-status">Submitting your ticket...</p>}
 
         <form
-          className={`create-ticket-form${shake ? ' form-shake' : ''}`}
+          className={`create-ticket-form${shake ? ' form-shake' : ''}${isSubmitting ? ' form-loading' : ''}`}
           onSubmit={handleSubmit(onSubmit, onInvalid)}
           noValidate
         >

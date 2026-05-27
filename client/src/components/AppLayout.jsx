@@ -3,9 +3,9 @@ import { NavLink, Outlet, useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 
 const navItems = [
-  { to: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
-  { to: '/tickets', label: 'Tickets', icon: Ticket },
-  { to: '/tickets/new', label: 'New Ticket', icon: PlusCircle },
+  { to: '/dashboard', label: 'Dashboard', icon: LayoutDashboard, end: true },
+  { to: '/tickets', label: 'Tickets', icon: Ticket, end: true },
+  { to: '/tickets/new', label: 'New Ticket', icon: PlusCircle, end: true },
 ]
 
 function getInitials(username) {
@@ -43,6 +43,7 @@ function AppLayout() {
                 <NavLink
                   key={item.to}
                   to={item.to}
+                  end={item.end}
                   className={({ isActive }) =>
                     `nav-link ${isActive ? 'active' : ''}`
                   }
