@@ -81,7 +81,12 @@ router.post('/login', (req, res, next) => {
       .prepare('SELECT * FROM users WHERE username = ? OR email = ?')
       .get(username, username);
 
-    if (!user || !bcrypt.compareSync(password, user.password_hash)) {
+    if (!user || !user.password_hash) {
+      return res.status(401).json({ error: 'Invalid credentials.' });
+    }
+
+    const isPasswordValid = bcrypt.compareSync(password, user.password_hash);
+    if (!isPasswordValid) {
       return res.status(401).json({ error: 'Invalid credentials.' });
     }
 

@@ -210,6 +210,11 @@ router.put('/:ticket_id', (req, res, next) => {
       return res.status(404).json({ error: 'Ticket not found.' });
     }
 
+    const actor = db.prepare('SELECT id FROM users WHERE id = ?').get(req.user.id);
+    if (!actor) {
+      return res.status(401).json({ error: 'Session is no longer valid. Please log in again.' });
+    }
+
     const now = new Date().toISOString().replace('T', ' ').slice(0, 19);
 
     const updateTicket = db.transaction(() => {

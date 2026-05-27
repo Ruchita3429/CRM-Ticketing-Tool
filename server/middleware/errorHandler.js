@@ -7,6 +7,12 @@ function errorHandler(err, req, res, next) {
     });
   }
 
+  if (err.code === 'SQLITE_CONSTRAINT_FOREIGNKEY') {
+    return res.status(400).json({
+      error: 'Invalid related data. Please refresh and sign in again.',
+    });
+  }
+
   const status = err.status || 500;
   const message =
     process.env.NODE_ENV === 'production'
