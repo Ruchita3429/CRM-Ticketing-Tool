@@ -563,6 +563,11 @@ p {
     flex-direction: column;
     align-items: flex-start;
   }
+
+  .dashboard-header-cta {
+    width: 100%;
+    justify-content: center;
+  }
 }
 
 .tickets-page {
@@ -1191,5 +1196,150 @@ p {
 
   .sticky-card {
     position: static;
+  }
+}
+
+@media (max-width: 768px) {
+  .main-content {
+    padding: 20px 14px;
+  }
+
+  .sidebar {
+    padding: 1rem 0.85rem;
+    gap: 1rem;
+  }
+
+  .sidebar-logo {
+    margin-bottom: 0.75rem;
+  }
+
+  .sidebar-nav {
+    gap: 0.35rem;
+  }
+
+  .nav-link {
+    padding: 0.62rem 0.7rem;
+    font-size: 0.92rem;
+  }
+
+  .dashboard-header h2,
+  .tickets-header h2,
+  .ticket-detail-header h2 {
+    font-size: 1.35rem;
+    line-height: 1.3;
+  }
+
+  .stats-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .table-head {
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+
+  .tickets-header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .tickets-header .btn-pill {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .tickets-filter-bar {
+    position: static;
+    top: auto;
+    padding: 0.85rem;
+  }
+
+  .tickets-table {
+    min-width: 760px;
+  }
+
+  .pagination-wrap {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .pagination-controls {
+    width: 100%;
+    flex-wrap: wrap;
+  }
+
+  .create-ticket-page {
+    max-width: 100%;
+  }
+
+  .priority-toggle-group {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+
+  .priority-toggle {
+    width: 100%;
+    text-align: center;
+  }
+
+  .info-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .note-item {
+    align-items: flex-start;
+  }
+
+  .note-meta {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.2rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .main-content {
+    padding: 16px 10px;
+  }
+
+  .crm-card {
+    padding: 0.9rem;
+    border-radius: 14px;
+  }
+
+  .btn-pill {
+    width: 100%;
+    justify-content: center;
+    padding: 0.6rem 0.95rem;
+  }
+
+  .dashboard-header h2,
+  .tickets-header h2,
+  .ticket-detail-header h2 {
+    font-size: 1.2rem;
+  }
+
+  .ticket-id-large {
+    font-size: 1rem;
+  }
+
+  .stat-number {
+    font-size: 1.7rem;
+  }
+
+  .tickets-table {
+    min-width: 680px;
+  }
+
+  .table-view-btn {
+    width: 100%;
+  }
+
+  .search-input-wrap,
+  .select-wrap select,
+  .create-ticket-form input,
+  .create-ticket-form textarea,
+  .note-field textarea {
+    font-size: 0.95rem;
   }
 }
