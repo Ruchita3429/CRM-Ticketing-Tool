@@ -1,6 +1,7 @@
 node_modules/
 .env
 *.db
+supabase.db
 data/
 .env
 .env.local

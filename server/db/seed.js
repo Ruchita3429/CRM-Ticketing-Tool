@@ -1,6 +1,5 @@
 const bcrypt = require('bcryptjs');
-const { v4: uuidv4 } = require('uuid');
-const { db } = require('./database');
+const { supabase } = require('./supabase');
 
 const DEMO_USERS = [
   {
@@ -17,32 +16,29 @@ const DEMO_USERS = [
   },
 ];
 
-function seedUsers() {
-  const count = db.prepare('SELECT COUNT(*) AS count FROM users').get().count;
+async function seedUsers() {
+  const { count, error: countError } = await supabase
+    .from('users')
+    .select('id', { count: 'exact', head: true });
+
+  if (countError) throw countError;
 
   if (count > 0) {
-    console.log('Database already seeded — skipping demo users');
+    console.log('Database already seeded - skipping demo users');
     return;
   }
 
-  const insert = db.prepare(`
-    INSERT INTO users (id, username, email, password_hash, role)
-    VALUES (@id, @username, @email, @password_hash, @role)
-  `);
+  const rows = DEMO_USERS.map((user) => ({
+    username: user.username,
+    email: user.email,
+    password_hash: bcrypt.hashSync(user.password, 10),
+    role: user.role,
+  }));
 
-  const seedMany = db.transaction((users) => {
-    for (const user of users) {
-      insert.run({
-        id: uuidv4(),
-        username: user.username,
-        email: user.email,
-        password_hash: bcrypt.hashSync(user.password, 10),
-        role: user.role,
-      });
-    }
-  });
+  const { error } = await supabase.from('users').insert(rows);
 
-  seedMany(DEMO_USERS);
+  if (error) throw error;
+
   console.log('Seeded demo users: admin / agent');
 }
 

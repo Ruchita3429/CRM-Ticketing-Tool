@@ -1,85 +1,71 @@
 # Customer Support CRM
 
-A full-stack Customer Support CRM with ticketing, notes, and JWT authentication.
+Node.js + Express CRM frontend and backend, migrated from SQLite to Supabase PostgreSQL.
 
-## Stack
+## Structure
 
-- **Backend:** Node.js, Express, SQLite (better-sqlite3), JWT, bcryptjs
-- **Frontend:** React, Tailwind (coming soon)
-
-## Project Structure
-
-```
+```text
 crm-app/
-├── server/          ← Express API
-│   ├── db/
-│   ├── routes/
-│   ├── middleware/
-│   └── index.js
-├── client/          ← React frontend
-└── README.md
+├── client/   React app
+└── server/   Express API
 ```
 
-## Backend Setup
+## What Goes Where
+
+`client/.env`:
+
+```env
+VITE_API_BASE_URL=http://localhost:5000/api
+```
+
+`server/.env`:
+
+```env
+PORT=5000
+JWT_SECRET=your_jwt_secret
+NODE_ENV=development
+FRONTEND_URL=https://crm-ticketing-tool.vercel.app
+SUPABASE_URL=https://mtxcilvvfkfibpprpgem.supabase.co
+SUPABASE_SERVICE_ROLE_KEY=your_service_role_key
+```
+
+The `VITE_SUPABASE_*` values are not used by this app's current architecture. The browser talks to the Express API, and the Express API talks to Supabase.
+
+## Run Order
+
+1. Paste the SQL from [server/db/schema.sql](</C:/CRM ticketing tool/crm-app/server/db/schema.sql>) into the Supabase SQL editor and run it.
+2. Put the backend env vars in `server/.env`.
+3. Put the frontend API URL in `client/.env`.
+4. Start the backend from `server/`.
+5. Start the frontend from `client/`.
+
+## Backend
 
 ```bash
 cd server
-cp .env.example .env
 npm install
 npm run dev
 ```
 
-The API starts on `http://localhost:5000` by default.
+## Frontend
 
-## Demo Users
-
-| Username | Email           | Password  | Role  |
-|----------|-----------------|-----------|-------|
-| admin    | admin@crm.com   | admin123  | admin |
-| agent    | agent@crm.com   | agent123  | agent |
-
-## Auth Endpoints
-
-### Register
-
-```http
-POST /api/auth/register
-Content-Type: application/json
-
-{
-  "username": "jane",
-  "email": "jane@example.com",
-  "password": "secret123",
-  "role": "agent"
-}
+```bash
+cd client
+npm install
+npm run dev
 ```
 
-### Login
+## Supabase Tables
 
-```http
-POST /api/auth/login
-Content-Type: application/json
+Running [server/db/schema.sql](</C:/CRM ticketing tool/crm-app/server/db/schema.sql>) creates:
 
-{
-  "username": "admin",
-  "password": "admin123"
-}
-```
+- `users`
+- `tickets`
+- `notes`
+- `tickets_search_idx`
 
-Both endpoints return a JWT token and user object (without password hash).
+## Result
 
-### Protected Routes
-
-Send the token in the `Authorization` header:
-
-```
-Authorization: Bearer <your_jwt_token>
-```
-
-## Environment Variables
-
-| Variable    | Description                          |
-|-------------|--------------------------------------|
-| PORT        | Server port (default: 5000)          |
-| JWT_SECRET  | Secret key for signing JWTs          |
-| NODE_ENV    | `development` or `production`        |
+- API endpoints keep the same signatures
+- The frontend still calls the Express API
+- The Express API reads and writes Supabase PostgreSQL

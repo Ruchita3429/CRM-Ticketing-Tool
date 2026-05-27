@@ -1,8 +1,7 @@
 const express = require('express');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
-const { v4: uuidv4 } = require('uuid');
-const { db } = require('../db/database');
+const { supabase } = require('../db/supabase');
 
 const router = express.Router();
 
@@ -23,8 +22,28 @@ function sanitizeUser(row) {
   return user;
 }
 
+async function findUserByUsernameOrEmail(value) {
+  const { data: byUsername, error: usernameError } = await supabase
+    .from('users')
+    .select('*')
+    .eq('username', value)
+    .maybeSingle();
+
+  if (usernameError) throw usernameError;
+  if (byUsername) return byUsername;
+
+  const { data: byEmail, error: emailError } = await supabase
+    .from('users')
+    .select('*')
+    .eq('email', value)
+    .maybeSingle();
+
+  if (emailError) throw emailError;
+  return byEmail;
+}
+
 // POST /api/auth/register
-router.post('/register', (req, res, next) => {
+router.post('/register', async (req, res, next) => {
   try {
     const { username, email, password, role = 'agent' } = req.body;
 
@@ -38,23 +57,21 @@ router.post('/register', (req, res, next) => {
       return res.status(400).json({ error: 'role must be admin or agent.' });
     }
 
-    const existing = db
-      .prepare('SELECT id FROM users WHERE username = ? OR email = ?')
-      .get(username, email);
-
+    const existing = (await findUserByUsernameOrEmail(username)) || (await findUserByUsernameOrEmail(email));
     if (existing) {
       return res.status(409).json({ error: 'Username or email already in use.' });
     }
 
-    const id = uuidv4();
     const password_hash = bcrypt.hashSync(password, SALT_ROUNDS);
 
-    db.prepare(
-      `INSERT INTO users (id, username, email, password_hash, role)
-       VALUES (?, ?, ?, ?, ?)`
-    ).run(id, username, email, password_hash, role);
+    const { data: user, error } = await supabase
+      .from('users')
+      .insert({ username, email, password_hash, role })
+      .select('*')
+      .single();
 
-    const user = db.prepare('SELECT * FROM users WHERE id = ?').get(id);
+    if (error) throw error;
+
     const token = signToken(user);
 
     res.status(201).json({
@@ -68,7 +85,7 @@ router.post('/register', (req, res, next) => {
 });
 
 // POST /api/auth/login
-router.post('/login', (req, res, next) => {
+router.post('/login', async (req, res, next) => {
   try {
     const { username, password } = req.body;
 
@@ -78,9 +95,7 @@ router.post('/login', (req, res, next) => {
       });
     }
 
-    const user = db
-      .prepare('SELECT * FROM users WHERE username = ? OR email = ?')
-      .get(username, username);
+    const user = await findUserByUsernameOrEmail(username);
 
     if (!user || !user.password_hash) {
       return res.status(401).json({ error: 'Invalid credentials.' });
@@ -98,7 +113,12 @@ router.post('/login', (req, res, next) => {
     // One-time healing for legacy plain-text rows: replace with bcrypt hash on successful login.
     if (!looksHashed) {
       const upgradedHash = bcrypt.hashSync(password, SALT_ROUNDS);
-      db.prepare('UPDATE users SET password_hash = ? WHERE id = ?').run(upgradedHash, user.id);
+      const { error: updateError } = await supabase
+        .from('users')
+        .update({ password_hash: upgradedHash })
+        .eq('id', user.id);
+
+      if (updateError) throw updateError;
       user.password_hash = upgradedHash;
     }
 

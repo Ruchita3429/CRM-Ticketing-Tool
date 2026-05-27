@@ -1,6 +1,5 @@
 const express = require('express');
-const { v4: uuidv4 } = require('uuid');
-const { db } = require('../db/database');
+const { supabase } = require('../db/supabase');
 const verifyToken = require('../middleware/verifyToken');
 const { ticketSchema } = require('../validations/ticket');
 
@@ -11,57 +10,63 @@ const VALID_PRIORITIES = ['Low', 'Medium', 'High'];
 
 router.use(verifyToken);
 
-function generateNextTicketId() {
-  const last = db
-    .prepare(
-      `SELECT ticket_id FROM tickets
-       WHERE ticket_id LIKE 'TKT-%'
-       ORDER BY CAST(SUBSTR(ticket_id, 5) AS INTEGER) DESC
-       LIMIT 1`
-    )
-    .get();
+async function generateNextTicketId() {
+  const { data, error } = await supabase
+    .from('tickets')
+    .select('ticket_id')
+    .like('ticket_id', 'TKT-%');
 
-  const nextNum = last ? parseInt(last.ticket_id.replace('TKT-', ''), 10) + 1 : 1;
-  return `TKT-${String(nextNum).padStart(3, '0')}`;
+  if (error) throw error;
+
+  const lastNum = (data || []).reduce((max, row) => {
+    const match = /^TKT-(\d+)$/.exec(row.ticket_id || '');
+    return match ? Math.max(max, parseInt(match[1], 10)) : max;
+  }, 0);
+
+  return `TKT-${String(lastNum + 1).padStart(3, '0')}`;
 }
 
-function findTicketByPublicId(ticketId) {
-  return db.prepare('SELECT * FROM tickets WHERE ticket_id = ?').get(ticketId);
-}
+async function findTicketByPublicId(ticketId) {
+  const { data, error } = await supabase
+    .from('tickets')
+    .select('*')
+    .eq('ticket_id', ticketId)
+    .maybeSingle();
 
-function toFtsQuery(input) {
-  const tokens = input
-    .trim()
-    .toLowerCase()
-    .replace(/[^\w\s-]/g, ' ')
-    .split(/\s+/)
-    .filter(Boolean);
-
-  if (!tokens.length) return null;
-  return tokens.map((token) => `${token}*`).join(' AND ');
+  if (error) throw error;
+  return data;
 }
 
 // GET /api/tickets/stats/summary
-router.get('/stats/summary', (req, res, next) => {
+router.get('/stats/summary', async (req, res, next) => {
   try {
-    const stats = db
-      .prepare(
-        `SELECT
-           COUNT(*) AS total,
-           SUM(CASE WHEN status = 'Open' THEN 1 ELSE 0 END) AS open,
-           SUM(CASE WHEN status = 'In Progress' THEN 1 ELSE 0 END) AS inProgress,
-           SUM(CASE WHEN status = 'Closed' THEN 1 ELSE 0 END) AS closed,
-           SUM(CASE WHEN priority = 'High' THEN 1 ELSE 0 END) AS highPriority
-         FROM tickets`
-      )
-      .get();
+    const countTickets = (filters = {}) => {
+      let query = supabase.from('tickets').select('id', { count: 'exact', head: true });
+
+      for (const [column, value] of Object.entries(filters)) {
+        query = query.eq(column, value);
+      }
+
+      return query;
+    };
+
+    const [total, open, inProgress, closed, highPriority] = await Promise.all([
+      countTickets(),
+      countTickets({ status: 'Open' }),
+      countTickets({ status: 'In Progress' }),
+      countTickets({ status: 'Closed' }),
+      countTickets({ priority: 'High' }),
+    ]);
+
+    const firstError = [total, open, inProgress, closed, highPriority].find((result) => result.error);
+    if (firstError) throw firstError.error;
 
     res.json({
-      total: stats.total,
-      open: stats.open,
-      inProgress: stats.inProgress,
-      closed: stats.closed,
-      highPriority: stats.highPriority,
+      total: total.count || 0,
+      open: open.count || 0,
+      inProgress: inProgress.count || 0,
+      closed: closed.count || 0,
+      highPriority: highPriority.count || 0,
     });
   } catch (err) {
     next(err);
@@ -69,7 +74,7 @@ router.get('/stats/summary', (req, res, next) => {
 });
 
 // POST /api/tickets
-router.post('/', (req, res, next) => {
+router.post('/', async (req, res, next) => {
   try {
     const result = ticketSchema.safeParse(req.body);
 
@@ -80,31 +85,30 @@ router.post('/', (req, res, next) => {
     }
 
     const { customer_name, customer_email, subject, description, priority } = result.data;
+    const ticket_id = await generateNextTicketId();
+    const now = new Date().toISOString();
 
-    const id = uuidv4();
-    const ticket_id = generateNextTicketId();
-    const now = new Date().toISOString().replace('T', ' ').slice(0, 19);
+    const { data: ticket, error } = await supabase
+      .from('tickets')
+      .insert({
+        ticket_id,
+        customer_name,
+        customer_email,
+        subject,
+        description,
+        status: 'Open',
+        priority,
+        created_at: now,
+        updated_at: now,
+      })
+      .select('ticket_id, created_at')
+      .single();
 
-    db.prepare(
-      `INSERT INTO tickets (
-         id, ticket_id, customer_name, customer_email, subject, description,
-         status, priority, created_at, updated_at
-       ) VALUES (?, ?, ?, ?, ?, ?, 'Open', ?, ?, ?)`
-    ).run(
-      id,
-      ticket_id,
-      customer_name,
-      customer_email,
-      subject,
-      description,
-      priority,
-      now,
-      now
-    );
+    if (error) throw error;
 
     res.status(201).json({
-      ticket_id,
-      created_at: now,
+      ticket_id: ticket.ticket_id,
+      created_at: ticket.created_at,
       message: 'Ticket created',
     });
   } catch (err) {
@@ -113,7 +117,7 @@ router.post('/', (req, res, next) => {
 });
 
 // GET /api/tickets
-router.get('/', (req, res, next) => {
+router.get('/', async (req, res, next) => {
   try {
     const { status, search, priority, page = '1', limit = '10' } = req.query;
     const searchTerm = typeof search === 'string' ? search.trim() : '';
@@ -130,50 +134,49 @@ router.get('/', (req, res, next) => {
       return res.status(400).json({ error: 'Invalid priority filter.' });
     }
 
-    const conditions = [];
-    const params = [];
+    let query = supabase
+      .from('tickets')
+      .select('ticket_id, customer_name, customer_email, subject, status, priority, created_at', {
+        count: 'exact',
+      });
 
     if (status) {
-      conditions.push('status = ?');
-      params.push(status);
+      query = query.eq('status', status);
     }
 
     if (priority) {
-      conditions.push('priority = ?');
-      params.push(priority);
+      query = query.eq('priority', priority);
     }
 
     if (searchTerm) {
-      const ftsQuery = toFtsQuery(searchTerm);
-      if (ftsQuery) {
-        conditions.push(
-          `tickets.rowid IN (
-            SELECT rowid
-            FROM tickets_fts
-            WHERE tickets_fts MATCH ?
-          )`
+      const escapedSearch = searchTerm
+        .replace(/[^\w\s@.-]/g, ' ')
+        .replace(/[%_]/g, '\\$&')
+        .trim();
+
+      if (escapedSearch) {
+        query = query.or(
+          [
+            `customer_name.ilike.%${escapedSearch}%`,
+            `customer_email.ilike.%${escapedSearch}%`,
+            `subject.ilike.%${escapedSearch}%`,
+            `description.ilike.%${escapedSearch}%`,
+            `ticket_id.ilike.%${escapedSearch}%`,
+          ].join(',')
         );
-        params.push(ftsQuery);
       }
     }
 
-    const whereClause = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
+    const { data: rows, count, error } = await query
+      .order('created_at', { ascending: false })
+      .range(offset, offset + limitNum - 1);
 
-    const total = db
-      .prepare(`SELECT COUNT(*) AS count FROM tickets ${whereClause}`)
-      .get(...params).count;
+    if (error) throw error;
 
-    const rows = db
-      .prepare(
-        `SELECT ticket_id, customer_name, customer_email, subject, status, priority, created_at
-         FROM tickets ${whereClause}
-         ORDER BY created_at DESC
-         LIMIT ? OFFSET ?`
-      )
-      .all(...params, limitNum, offset);
+    const total = count || 0;
 
     res.json({
-      tickets: rows,
+      tickets: rows || [],
       total,
       page: pageNum,
       totalPages: Math.ceil(total / limitNum) || 1,
@@ -184,34 +187,32 @@ router.get('/', (req, res, next) => {
 });
 
 // GET /api/tickets/:ticket_id
-router.get('/:ticket_id', (req, res, next) => {
+router.get('/:ticket_id', async (req, res, next) => {
   try {
-    const ticket = findTicketByPublicId(req.params.ticket_id);
+    const ticket = await findTicketByPublicId(req.params.ticket_id);
 
     if (!ticket) {
       return res.status(404).json({ error: 'Ticket not found.' });
     }
 
-    const notes = db
-      .prepare(
-        `SELECT n.id, n.note_text, u.username AS created_by, n.created_at
-         FROM notes n
-         JOIN users u ON n.created_by = u.id
-         WHERE n.ticket_id = ?
-         ORDER BY n.created_at ASC`
-      )
-      .all(ticket.id);
+    const { data: notes, error } = await supabase
+      .from('notes')
+      .select('id, note_text, created_by, created_at')
+      .eq('ticket_id', ticket.ticket_id)
+      .order('created_at', { ascending: true });
+
+    if (error) throw error;
 
     const { id, assigned_to, ...publicTicket } = ticket;
 
-    res.json({ ...publicTicket, notes });
+    res.json({ ...publicTicket, notes: notes || [] });
   } catch (err) {
     next(err);
   }
 });
 
 // PUT /api/tickets/:ticket_id
-router.put('/:ticket_id', (req, res, next) => {
+router.put('/:ticket_id', async (req, res, next) => {
   try {
     const { status, note_text } = req.body;
 
@@ -223,37 +224,50 @@ router.put('/:ticket_id', (req, res, next) => {
       return res.status(400).json({ error: 'Invalid status value.' });
     }
 
-    const ticket = findTicketByPublicId(req.params.ticket_id);
+    const ticket = await findTicketByPublicId(req.params.ticket_id);
 
     if (!ticket) {
       return res.status(404).json({ error: 'Ticket not found.' });
     }
 
-    const actor = db.prepare('SELECT id FROM users WHERE id = ?').get(req.user.id);
+    const { data: actor, error: actorError } = await supabase
+      .from('users')
+      .select('id')
+      .eq('id', req.user.id)
+      .maybeSingle();
+
+    if (actorError) throw actorError;
+
     if (!actor) {
       return res.status(401).json({ error: 'Session is no longer valid. Please log in again.' });
     }
 
-    const now = new Date().toISOString().replace('T', ' ').slice(0, 19);
+    const now = new Date().toISOString();
 
-    const updateTicket = db.transaction(() => {
-      if (note_text) {
-        db.prepare(
-          `INSERT INTO notes (id, ticket_id, note_text, created_by, created_at)
-           VALUES (?, ?, ?, ?, ?)`
-        ).run(uuidv4(), ticket.id, note_text, req.user.id, now);
-      }
+    if (note_text) {
+      const { error: noteError } = await supabase
+        .from('notes')
+        .insert({
+          ticket_id: ticket.ticket_id,
+          note_text,
+          created_by: req.user.username,
+          created_at: now,
+        });
 
-      if (status !== undefined) {
-        db.prepare(
-          `UPDATE tickets SET status = ?, updated_at = ? WHERE id = ?`
-        ).run(status, now, ticket.id);
-      } else if (note_text) {
-        db.prepare(`UPDATE tickets SET updated_at = ? WHERE id = ?`).run(now, ticket.id);
-      }
-    });
+      if (noteError) throw noteError;
+    }
 
-    updateTicket();
+    if (status !== undefined || note_text) {
+      const updates = { updated_at: now };
+      if (status !== undefined) updates.status = status;
+
+      const { error: updateError } = await supabase
+        .from('tickets')
+        .update(updates)
+        .eq('ticket_id', ticket.ticket_id);
+
+      if (updateError) throw updateError;
+    }
 
     res.json({ success: true, updated_at: now });
   } catch (err) {

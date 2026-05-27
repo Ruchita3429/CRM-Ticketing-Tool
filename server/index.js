@@ -1,7 +1,6 @@
 require('dotenv').config();
 
 const express = require('express');
-const { initSchema, dbPath } = require('./db/database');
 const { seedUsers } = require('./db/seed');
 const authRoutes = require('./routes/auth');
 const ticketRoutes = require('./routes/tickets');
@@ -30,7 +29,7 @@ if (!process.env.JWT_SECRET) {
   process.exit(1);
 }
 
-// Explicit CORS — required for Vercel frontend → Render API (incl. Authorization preflight)
+// Explicit CORS - required for Vercel frontend to Render API, including Authorization preflight.
 app.use((req, res, next) => {
   const origin = req.headers.origin;
 
@@ -69,19 +68,24 @@ app.use((req, res) => {
 // Global error handler
 app.use(errorHandler);
 
-// Initialize database and seed
-initSchema();
-seedUsers();
+async function startServer() {
+  await seedUsers();
 
-app.listen(PORT, () => {
-  console.log('─────────────────────────────────────────');
-  console.log(`  CRM API Server running`);
-  console.log(`  Environment : ${process.env.NODE_ENV || 'development'}`);
-  console.log(`  Port        : ${PORT}`);
-  console.log(`  Database    : ${dbPath}`);
-  console.log(`  Auth        : POST /api/auth/register | /api/auth/login`);
-  console.log(`  Tickets     : /api/tickets (protected)`);
-  console.log('─────────────────────────────────────────');
+  app.listen(PORT, () => {
+    console.log('-----------------------------------------');
+    console.log(`  CRM API Server running`);
+    console.log(`  Environment : ${process.env.NODE_ENV || 'development'}`);
+    console.log(`  Port        : ${PORT}`);
+    console.log(`  Database    : Supabase PostgreSQL`);
+    console.log(`  Auth        : POST /api/auth/register | /api/auth/login`);
+    console.log(`  Tickets     : /api/tickets (protected)`);
+    console.log('-----------------------------------------');
+  });
+}
+
+startServer().catch((err) => {
+  console.error('Failed to start CRM API server:', err);
+  process.exit(1);
 });
 
 module.exports = app;
