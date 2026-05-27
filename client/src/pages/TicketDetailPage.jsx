@@ -34,7 +34,21 @@ function getPriorityClass(priority) {
 
 function formatDate(value) {
   if (!value) return '—'
-  return new Date(value).toLocaleString()
+  const normalized = value.replace(' ', 'T')
+  const hasTimezone = /[zZ]|[+-]\d{2}:?\d{2}$/.test(normalized)
+  const parsed = new Date(hasTimezone ? normalized : `${normalized}Z`)
+
+  if (Number.isNaN(parsed.getTime())) return value
+
+  return parsed.toLocaleString('en-IN', {
+    timeZone: 'Asia/Kolkata',
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: true,
+  })
 }
 
 function TicketDetailPage() {

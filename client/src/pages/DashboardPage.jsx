@@ -1,6 +1,7 @@
 import { ArrowUpRight, TrendingUp } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import toast from 'react-hot-toast'
 import api from '../api/axios'
 import { useAuth } from '../context/AuthContext'
 
@@ -79,6 +80,10 @@ function DashboardPage() {
         ])
         setSummary(summaryRes.data)
         setTickets(ticketsRes.data.tickets || [])
+      } catch (error) {
+        if (error?.response?.status !== 401 && error?.response?.status !== 403) {
+          toast.error(error?.response?.data?.error || 'Failed to load dashboard data.')
+        }
       } finally {
         setLoading(false)
       }

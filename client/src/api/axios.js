@@ -28,4 +28,23 @@ api.interceptors.request.use(
   (error) => Promise.reject(error),
 )
 
+api.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    const status = error?.response?.status
+    const url = error?.config?.url || ''
+    const isAuthCall = url.includes('/auth/login') || url.includes('/auth/register')
+
+    if ((status === 401 || status === 403) && !isAuthCall) {
+      localStorage.removeItem('token')
+      localStorage.removeItem('user')
+      if (window.location.pathname !== '/login') {
+        window.location.href = '/login'
+      }
+    }
+
+    return Promise.reject(error)
+  },
+)
+
 export default api
