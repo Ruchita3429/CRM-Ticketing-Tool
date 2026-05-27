@@ -29,6 +29,18 @@ function findTicketByPublicId(ticketId) {
   return db.prepare('SELECT * FROM tickets WHERE ticket_id = ?').get(ticketId);
 }
 
+function toFtsQuery(input) {
+  const tokens = input
+    .trim()
+    .toLowerCase()
+    .replace(/[^\w\s-]/g, ' ')
+    .split(/\s+/)
+    .filter(Boolean);
+
+  if (!tokens.length) return null;
+  return tokens.map((token) => `${token}*`).join(' AND ');
+}
+
 // GET /api/tickets/stats/summary
 router.get('/stats/summary', (req, res, next) => {
   try {
@@ -104,6 +116,7 @@ router.post('/', (req, res, next) => {
 router.get('/', (req, res, next) => {
   try {
     const { status, search, priority, page = '1', limit = '10' } = req.query;
+    const searchTerm = typeof search === 'string' ? search.trim() : '';
 
     const pageNum = Math.max(1, parseInt(page, 10) || 1);
     const limitNum = Math.min(100, Math.max(1, parseInt(limit, 10) || 10));
@@ -130,12 +143,18 @@ router.get('/', (req, res, next) => {
       params.push(priority);
     }
 
-    if (search) {
-      const term = `%${search}%`;
-      conditions.push(
-        `(customer_name LIKE ? OR customer_email LIKE ? OR subject LIKE ? OR description LIKE ? OR ticket_id LIKE ?)`
-      );
-      params.push(term, term, term, term, term);
+    if (searchTerm) {
+      const ftsQuery = toFtsQuery(searchTerm);
+      if (ftsQuery) {
+        conditions.push(
+          `tickets.rowid IN (
+            SELECT rowid
+            FROM tickets_fts
+            WHERE tickets_fts MATCH ?
+          )`
+        );
+        params.push(ftsQuery);
+      }
     }
 
     const whereClause = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';

@@ -1,4 +1,4 @@
-import { ChevronDown, Search, TicketX } from 'lucide-react'
+import { CheckCircle2, ChevronDown, Circle, Clock, Search, TicketX } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import toast from 'react-hot-toast'
@@ -24,6 +24,12 @@ function getStatusClass(status) {
   if (status === 'Open') return 'badge status-open'
   if (status === 'In Progress') return 'badge status-progress'
   return 'badge status-closed'
+}
+
+function getStatusIcon(status) {
+  if (status === 'Open') return Circle
+  if (status === 'In Progress') return Clock
+  return CheckCircle2
 }
 
 function getPriorityDotClass(priority) {
@@ -80,12 +86,14 @@ function TicketsPage() {
       }
       params.set('page', '1')
       setSearchParams(params, { replace: true })
-    }, 300)
+    }, 350)
 
     return () => clearTimeout(timer)
   }, [searchInput, searchParams, setSearchParams])
 
   useEffect(() => {
+    const controller = new AbortController()
+
     const fetchTickets = async () => {
       setLoading(true)
       try {
@@ -97,11 +105,14 @@ function TicketsPage() {
         const search = searchParams.get('search')
         if (search) query.set('search', search)
 
-        const response = await api.get(`/tickets?${query.toString()}`)
+        const response = await api.get(`/tickets?${query.toString()}`, {
+          signal: controller.signal,
+        })
         setTickets(response.data.tickets || [])
         setTotal(response.data.total || 0)
         setTotalPages(Math.max(1, response.data.totalPages || 1))
       } catch (error) {
+        if (error?.code === 'ERR_CANCELED') return
         toast.error(error?.response?.data?.error || 'Failed to load tickets.')
       } finally {
         setLoading(false)
@@ -109,6 +120,7 @@ function TicketsPage() {
     }
 
     fetchTickets()
+    return () => controller.abort()
   }, [page, priority, searchParams, status])
 
   const pageWindow = useMemo(() => getPageWindow(page, totalPages), [page, totalPages])
@@ -222,9 +234,15 @@ function TicketsPage() {
                       <td>{ticket.customer_email}</td>
                       <td>{ticket.subject}</td>
                       <td>
-                        <span className={getStatusClass(ticket.status)}>
+                        {(() => {
+                          const StatusIcon = getStatusIcon(ticket.status)
+                          return (
+                        <span className={`${getStatusClass(ticket.status)} badge-with-icon`}>
+                          <StatusIcon size={14} />
                           {ticket.status}
                         </span>
+                          )
+                        })()}
                       </td>
                       <td>
                         <span className="priority-label">

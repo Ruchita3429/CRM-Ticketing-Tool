@@ -1,4 +1,4 @@
-import { CheckCircle2, Circle, Loader2, MessageSquare } from 'lucide-react'
+import { CheckCircle2, Circle, Clock, Loader2, MessageSquare } from 'lucide-react'
 import { useCallback, useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import toast from 'react-hot-toast'
@@ -6,7 +6,7 @@ import api from '../api/axios'
 
 const STATUS_OPTIONS = [
   { value: 'Open', icon: Circle, className: 'status-card open' },
-  { value: 'In Progress', icon: Loader2, className: 'status-card progress' },
+  { value: 'In Progress', icon: Clock, className: 'status-card progress' },
   { value: 'Closed', icon: CheckCircle2, className: 'status-card closed' },
 ]
 
@@ -24,6 +24,12 @@ function getStatusClass(status) {
   if (status === 'Open') return 'badge status-open badge-lg'
   if (status === 'In Progress') return 'badge status-progress badge-lg'
   return 'badge status-closed badge-lg'
+}
+
+function getStatusIcon(status) {
+  if (status === 'Open') return Circle
+  if (status === 'In Progress') return Clock
+  return CheckCircle2
 }
 
 function getPriorityClass(priority) {
@@ -141,6 +147,8 @@ function TicketDetailPage() {
     )
   }
 
+  const StatusIcon = getStatusIcon(ticket.status)
+
   return (
     <div className="ticket-detail-page">
       <Link className="back-link" to="/tickets">
@@ -153,7 +161,10 @@ function TicketDetailPage() {
             <p className="ticket-id-large">{ticket.ticket_id}</p>
             <h2>{ticket.subject}</h2>
             <div className="badge-row">
-              <span className={getStatusClass(ticket.status)}>{ticket.status}</span>
+              <span className={`${getStatusClass(ticket.status)} badge-with-icon`}>
+                <StatusIcon size={14} />
+                {ticket.status}
+              </span>
               <span className={getPriorityClass(ticket.priority)}>{ticket.priority}</span>
             </div>
           </header>
@@ -228,7 +239,7 @@ function TicketDetailPage() {
                     className={`${option.className} ${selected ? 'selected' : ''}`}
                     onClick={() => setSelectedStatus(option.value)}
                   >
-                    <Icon size={18} className={option.value === 'In Progress' ? 'spin-slow' : ''} />
+                    <Icon size={18} />
                     <span>{option.value}</span>
                   </button>
                 )

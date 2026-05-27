@@ -48,7 +48,44 @@ function initSchema() {
       FOREIGN KEY (ticket_id) REFERENCES tickets(id) ON DELETE CASCADE,
       FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE CASCADE
     );
+
+    CREATE INDEX IF NOT EXISTS idx_tickets_created_at ON tickets(created_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_tickets_status ON tickets(status);
+    CREATE INDEX IF NOT EXISTS idx_tickets_priority ON tickets(priority);
+    CREATE INDEX IF NOT EXISTS idx_tickets_ticket_id ON tickets(ticket_id);
+    CREATE INDEX IF NOT EXISTS idx_tickets_customer_name ON tickets(customer_name);
+    CREATE INDEX IF NOT EXISTS idx_tickets_customer_email ON tickets(customer_email);
+
+    CREATE VIRTUAL TABLE IF NOT EXISTS tickets_fts USING fts5(
+      customer_name,
+      customer_email,
+      subject,
+      description,
+      ticket_id,
+      content='tickets',
+      content_rowid='rowid',
+      tokenize='unicode61'
+    );
+
+    CREATE TRIGGER IF NOT EXISTS tickets_ai AFTER INSERT ON tickets BEGIN
+      INSERT INTO tickets_fts(rowid, customer_name, customer_email, subject, description, ticket_id)
+      VALUES (new.rowid, new.customer_name, new.customer_email, new.subject, new.description, new.ticket_id);
+    END;
+
+    CREATE TRIGGER IF NOT EXISTS tickets_ad AFTER DELETE ON tickets BEGIN
+      INSERT INTO tickets_fts(tickets_fts, rowid, customer_name, customer_email, subject, description, ticket_id)
+      VALUES('delete', old.rowid, old.customer_name, old.customer_email, old.subject, old.description, old.ticket_id);
+    END;
+
+    CREATE TRIGGER IF NOT EXISTS tickets_au AFTER UPDATE ON tickets BEGIN
+      INSERT INTO tickets_fts(tickets_fts, rowid, customer_name, customer_email, subject, description, ticket_id)
+      VALUES('delete', old.rowid, old.customer_name, old.customer_email, old.subject, old.description, old.ticket_id);
+      INSERT INTO tickets_fts(rowid, customer_name, customer_email, subject, description, ticket_id)
+      VALUES (new.rowid, new.customer_name, new.customer_email, new.subject, new.description, new.ticket_id);
+    END;
   `);
+
+  db.exec(`INSERT INTO tickets_fts(tickets_fts) VALUES('rebuild');`);
 }
 
 module.exports = { db, initSchema, dbPath };

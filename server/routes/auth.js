@@ -7,6 +7,7 @@ const { db } = require('../db/database');
 const router = express.Router();
 
 const VALID_ROLES = ['admin', 'agent'];
+const SALT_ROUNDS = 12;
 
 function signToken(user) {
   return jwt.sign(
@@ -46,7 +47,7 @@ router.post('/register', (req, res, next) => {
     }
 
     const id = uuidv4();
-    const password_hash = bcrypt.hashSync(password, 10);
+    const password_hash = bcrypt.hashSync(password, SALT_ROUNDS);
 
     db.prepare(
       `INSERT INTO users (id, username, email, password_hash, role)
@@ -85,9 +86,20 @@ router.post('/login', (req, res, next) => {
       return res.status(401).json({ error: 'Invalid credentials.' });
     }
 
-    const isPasswordValid = bcrypt.compareSync(password, user.password_hash);
+    const looksHashed = user.password_hash.startsWith('$2');
+    const isPasswordValid = looksHashed
+      ? bcrypt.compareSync(password, user.password_hash)
+      : password === user.password_hash;
+
     if (!isPasswordValid) {
       return res.status(401).json({ error: 'Invalid credentials.' });
+    }
+
+    // One-time healing for legacy plain-text rows: replace with bcrypt hash on successful login.
+    if (!looksHashed) {
+      const upgradedHash = bcrypt.hashSync(password, SALT_ROUNDS);
+      db.prepare('UPDATE users SET password_hash = ? WHERE id = ?').run(upgradedHash, user.id);
+      user.password_hash = upgradedHash;
     }
 
     const token = signToken(user);
