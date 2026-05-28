@@ -5,28 +5,6 @@ import toast from 'react-hot-toast'
 import api from '../api/axios'
 import { useAuth } from '../context/AuthContext'
 
-function CountUpNumber({ value, duration = 900 }) {
-  const [display, setDisplay] = useState(0)
-
-  useEffect(() => {
-    let frameId
-    const startTime = performance.now()
-
-    const animate = (now) => {
-      const progress = Math.min((now - startTime) / duration, 1)
-      setDisplay(Math.floor(value * progress))
-      if (progress < 1) {
-        frameId = requestAnimationFrame(animate)
-      }
-    }
-
-    frameId = requestAnimationFrame(animate)
-    return () => cancelAnimationFrame(frameId)
-  }, [value, duration])
-
-  return <span>{display}</span>
-}
-
 function formatDateTime(date) {
   return new Intl.DateTimeFormat('en-US', {
     weekday: 'short',
@@ -181,7 +159,7 @@ function DashboardPage() {
                 <ArrowUpRight size={16} className="stat-card-arrow" aria-hidden />
                 <p className="stat-label">{card.label}</p>
                 <p className="stat-number">
-                  <CountUpNumber value={summary[card.key] || 0} />
+                  <span>{summary[card.key] || 0}</span>
                 </p>
                 <div className="stat-meta">
                   <TrendingUp size={14} />

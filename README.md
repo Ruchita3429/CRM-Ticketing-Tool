@@ -34,10 +34,11 @@ The `VITE_SUPABASE_*` values are not used by this app's current architecture. Th
 ## Run Order
 
 1. Paste the SQL from [server/db/schema.sql](</C:/CRM ticketing tool/crm-app/server/db/schema.sql>) into the Supabase SQL editor and run it.
-2. Put the backend env vars in `server/.env`.
-3. Put the frontend API URL in `client/.env`.
-4. Start the backend from `server/`.
-5. Start the frontend from `client/`.
+2. If the tables already exist, run [server/db/performance.sql](</C:/CRM ticketing tool/crm-app/server/db/performance.sql>) to add the search indexes.
+3. Put the backend env vars in `server/.env`.
+4. Put the frontend API URL in `client/.env`.
+5. Start the backend from `server/`.
+6. Start the frontend from `client/`.
 
 ## Backend
 

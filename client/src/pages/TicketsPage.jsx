@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import toast from 'react-hot-toast'
 import api from '../api/axios'
+import useDebouncedValue from '../hooks/useDebouncedValue'
 
 const PAGE_SIZE = 10
 const VALID_STATUSES = ['Open', 'In Progress', 'Closed']
@@ -52,14 +53,17 @@ function TicketsPage() {
   const [tickets, setTickets] = useState([])
   const [total, setTotal] = useState(0)
   const [totalPages, setTotalPages] = useState(1)
-  const [loading, setLoading] = useState(true)
   const [searchInput, setSearchInput] = useState(searchParams.get('search') || '')
+  const [isInitialLoading, setIsInitialLoading] = useState(true)
+  const [isRefreshing, setIsRefreshing] = useState(false)
+  const debouncedSearchInput = useDebouncedValue(searchInput, 500)
 
   const rawStatus = searchParams.get('status')
   const rawPriority = searchParams.get('priority')
   const status = VALID_STATUSES.includes(rawStatus) ? rawStatus : 'All'
   const priority = VALID_PRIORITIES.includes(rawPriority) ? rawPriority : 'All'
   const page = Math.max(1, Number(searchParams.get('page') || 1))
+  const searchQuery = searchParams.get('search') || ''
   const pageHeading = getPageHeading(status, priority)
 
   useEffect(() => {
@@ -73,37 +77,41 @@ function TicketsPage() {
     Boolean(searchParams.get('search')) || status !== 'All' || priority !== 'All'
 
   useEffect(() => {
-    setSearchInput(searchParams.get('search') || '')
-  }, [searchParams])
+    setSearchInput(searchQuery)
+  }, [searchQuery])
 
   useEffect(() => {
-    const timer = setTimeout(() => {
-      const params = new URLSearchParams(searchParams)
-      if (searchInput.trim()) {
-        params.set('search', searchInput.trim())
-      } else {
-        params.delete('search')
-      }
-      params.set('page', '1')
-      setSearchParams(params, { replace: true })
-    }, 350)
+    const nextSearch = debouncedSearchInput.trim()
 
-    return () => clearTimeout(timer)
-  }, [searchInput, searchParams, setSearchParams])
+    if (nextSearch === searchQuery) return
+
+    const params = new URLSearchParams(searchParams)
+    if (nextSearch) {
+      params.set('search', nextSearch)
+    } else {
+      params.delete('search')
+    }
+    params.set('page', '1')
+    setSearchParams(params, { replace: true })
+  }, [debouncedSearchInput, searchQuery, searchParams, setSearchParams])
 
   useEffect(() => {
     const controller = new AbortController()
 
     const fetchTickets = async () => {
-      setLoading(true)
+      const firstLoad = tickets.length === 0 && isInitialLoading
+      if (firstLoad) {
+        setIsInitialLoading(true)
+      } else {
+        setIsRefreshing(true)
+      }
       try {
         const query = new URLSearchParams()
         query.set('page', String(page))
         query.set('limit', String(PAGE_SIZE))
         if (status !== 'All') query.set('status', status)
         if (priority !== 'All') query.set('priority', priority)
-        const search = searchParams.get('search')
-        if (search) query.set('search', search)
+        if (searchQuery) query.set('search', searchQuery)
 
         const response = await api.get(`/tickets?${query.toString()}`, {
           signal: controller.signal,
@@ -115,13 +123,14 @@ function TicketsPage() {
         if (error?.code === 'ERR_CANCELED') return
         toast.error(error?.response?.data?.error || 'Failed to load tickets.')
       } finally {
-        setLoading(false)
+        setIsInitialLoading(false)
+        setIsRefreshing(false)
       }
     }
 
     fetchTickets()
     return () => controller.abort()
-  }, [page, priority, searchParams, status])
+  }, [page, priority, searchQuery, status])
 
   const pageWindow = useMemo(() => getPageWindow(page, totalPages), [page, totalPages])
 
@@ -204,6 +213,9 @@ function TicketsPage() {
       </section>
 
       <section className="crm-card tickets-list-card">
+        {isRefreshing && !isInitialLoading && (
+          <div className="muted tickets-refreshing">Updating results...</div>
+        )}
         <div className="table-wrap">
           <table className="tickets-table">
             <thead>
@@ -219,7 +231,7 @@ function TicketsPage() {
               </tr>
             </thead>
             <tbody>
-              {loading
+              {isInitialLoading
                 ? Array.from({ length: 7 }).map((_, idx) => (
                     <tr key={idx}>
                       <td colSpan={8}>
@@ -266,7 +278,7 @@ function TicketsPage() {
           </table>
         </div>
 
-        {!loading && tickets.length === 0 && (
+        {!isInitialLoading && tickets.length === 0 && (
           <div className="tickets-empty">
             <TicketX size={50} />
             <h3>No tickets found</h3>
@@ -283,7 +295,7 @@ function TicketsPage() {
             <button
               type="button"
               className="page-btn"
-              disabled={page <= 1 || loading}
+              disabled={page <= 1}
               onClick={() => goToPage(page - 1)}
             >
               Previous
@@ -294,7 +306,6 @@ function TicketsPage() {
                 key={pageNum}
                 type="button"
                 className={`page-btn ${pageNum === page ? 'active' : ''}`}
-                disabled={loading}
                 onClick={() => goToPage(pageNum)}
               >
                 {pageNum}
@@ -304,7 +315,7 @@ function TicketsPage() {
             <button
               type="button"
               className="page-btn"
-              disabled={page >= totalPages || loading}
+              disabled={page >= totalPages}
               onClick={() => goToPage(page + 1)}
             >
               Next
